@@ -158,25 +158,41 @@ int get_rand() {
  * @param k, quantidade de threads
  * @return 
  */
-int gerenciador(long *n, int *k) {
+int manage_threads(long *n, int *k) {
     int rest = *n - (*med * *k);
     pthread_t *thread = malloc(sizeof (pthread_t) * *k);
-
+    int med = *n / (*k);
     for (int i = 0; i < *k; i++) {
-        long* ind = malloc(sizeof (long));
-        *ind = (*med) * i;
+        sum_args *args = malloc(sizeof (sum_args));
+        args->index = med*i;
+        args->nb = med;
+        //        long* ind = malloc(sizeof (long));
+        //        *ind = (*med) * i;
         printf("THREAD: %d ", i);
-        if (pthread_create(&thread[i], NULL, &somador, (void *) ind)) { // 3 arg = func to exec 4 arg = arg passed to func
+        if (pthread_create(&thread[i], NULL, &sum, (void *) args)) { // 3 arg = func to exec 4 arg = arg passed to func
             printf("Error while creating threds. \n");
             exit(EXIT_FAILURE);
         }
         printf("\n\nAFTER THREAD: %d\n\n ", i);
-        
+        free(args);
+
     }
 
+    // only enter the loop if rest>0
     if (rest) {
-        //        manage_rest();
+        sum_args * args = malloc(sizeof (sum_args));
+        args->index = *k*med;
+        args->nb = rest;
+        if (pthread_create(&thread[0], NULL, &sum, (void *) args)) { // 3 arg = func to exec 4 arg = arg passed to func
+            printf("Error while creating threds. \n");
+            exit(EXIT_FAILURE);
+        }
     }
+    //    for (int ind_rest = 0; ind_rest < rest; ind_rest++) {
+    //    }
+    //    if (rest) {
+    //        
+    //    }
     //
     //    int rest = 0;
     //    int index = 0;
@@ -204,23 +220,44 @@ int gerenciador(long *n, int *k) {
  * @param index, where to start reading the vector
  * @return 
  */
-
-void *somador(void * arg) {
-    long * ind = (long *) arg;
+void *sum(void * arg) {
+    sum_args *args = malloc(sizeof (sum_args));
+    args = (sum_args *) arg;
+    int med = args->nb;
+    long ind = args->index;
+    //    long * ind;
     double *sum = malloc(sizeof (double));
     *sum = 0;
-    for (int i = 0; i < *med; i++) {
-        *sum += list[*ind + i];
+    int i;
+    for (i = 0; i < med; i++) {
+        *sum += list[ind + i];
     }
     //    printf("\n  SOMADOR SUM: %d  \n", *sum);
     acquire(sum_lock);
     *acc += *sum;
     printf("\n\nACC: %d \n\n", *acc); //segmentation fault
     release(sum_lock);
-
-    printf("\n\n nTHREAD : %lu  LEAVING MODAFUCKA\n\n", *ind / (*med)); //segmentation fault
-    return ind;
+    printf("\n\n nTHREAD : %lu  LEAVING MODAFUCKA\n\n", ind / med); //segmentation fault
+    return args;
 }
+
+//void *sum_rest(void * arg) {
+//    long * ind = (long *) arg;
+//    double *sum = malloc(sizeof (double));
+//    *sum = 0;
+//    int i;
+//    for (i = 0; i < *med && ; i++) {
+//        *sum += list[*ind + i];
+//    }
+//    //    printf("\n  SOMADOR SUM: %d  \n", *sum);
+//    acquire(sum_lock);
+//    *acc += *sum;
+//    printf("\n\nACC: %d \n\n", *acc); //segmentation fault
+//    release(sum_lock);
+//
+//    printf("\n\n nTHREAD : %lu  LEAVING MODAFUCKA\n\n", *ind / (*med)); //segmentation fault
+//    return ind;
+//}
 
 /**
  * empty the vector
@@ -248,7 +285,7 @@ int executor(long *n, int *k, clk * clo) {
 
     set_beg_time(clo);
     printf("before gerenciador\n\n BEGclo: %lu\n", (long) clo->beg);
-    gerenciador(n, k);
+    manage_threads(n, k);
     printf("after gerenciador\n");
     set_end_time(clo);
     printf("after set end time \n\nENDclo: %lu\n", (long) clo->beg);
@@ -284,11 +321,7 @@ int allocate(long size) {
     return 0;
 }
 
-int initialize(int argc, char** argv) {
-    long *n = malloc(sizeof (long));
-    *n = atoi(argv[1]); // how many numbers
-    int *k = malloc(sizeof (int));
-    *k = atoi(argv[2]); // how many threads
+clk *initialize(long *n, int*k) {
     med = malloc(sizeof (long));
     *med = *n / *k;
     printf("EXECUTION WITH: \n %d threads and %lu numbers", *k, *n);
@@ -303,36 +336,49 @@ int initialize(int argc, char** argv) {
     clk * clo = malloc(sizeof (clk));
     clo->beg = 0;
     clo->end = 0;
-    printf("1st arg:  how many numbers 2nd arg: number of threads\n");
-    if (argc != 3) {
-        printf("wrong number of arguments [2 args needed] \n");
-        return -1;
-    }
-    printf("before set");
-    printf("before allocate\n");
-    //    allocate(n);
-    printf("after allocate\n");
 
+    return clo;
+}
+
+/**
+ * execute the program with a specific n and k.
+ * @param n
+ * @param k
+ * @return 
+ */
+int run(long *n, int* k) {
+    clk * clo = initialize(n, k);
     executor(n, k, clo);
-    //    printf("before fill vector\n");
-    //    fill_vector(n);
-    //    printf("after fill vector\n");
-
-    printf("after printing time\n");
-    //    executor(n, k);
-
+    int i = 0;
+    int sum = 0;
+    while (list[i]) {
+        sum += list[i];
+        printf("BOYAH NUM: %d sum: %d\n", list[i], sum);
+        i++;
+    }
+    free(list);
     return 0;
 }
 
-void test_lock() {
-    // fazer dois threads
-    // fazer o lock
-    // escrever com um thread
-    // printar algo
-    // fazer dormir
-    // tentar escrever com o outro
+/**
+ * run_the execution for all the combination of N and K
+ * where N eq size o the array
+ * K eq number os threads
+ * @return 0, if no error
+ */
+int run_all() {
+    //    for (){
+    //        for(){
 
+    long n = 3;
+    int k = 3;
+    run(&n, &k);
+    //        }
+    //    }
 
+    //    int nb_threads[13] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30];
+    //    long nb_threads[3] = [N8, N9, N10];
+    return 0;
 }
 
 /*
@@ -350,10 +396,12 @@ void test_lock() {
  * 
  */
 int main(int argc, char** argv) {
-
-    printf("args: %d\n", argc);
-    initialize(argc, argv);
-    free(list);
+    printf("1st arg:  how many numbers 2nd arg: number of threads\n");
+    if (argc != 3) {
+        printf("wrong number of arguments [2 args needed] \n");
+        return -1;
+    }
+    run_all();
     return (EXIT_SUCCESS);
 }
 //

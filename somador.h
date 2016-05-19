@@ -24,22 +24,25 @@ typedef struct Exec {
     int nb_threads;
 } exe;
 
-int set_beg_time(clk *clk);
-int set_end_time(clk *clk);
+void *add(void * arg);
+int fill_with_threads(long *n, int *k);
+int free_some();
+double set_beg_time(clk *clk);
+double set_end_time(clk *clk);
 int spinlock();
 void acquire(char* lock);
-char * format_time(int diff);
-void print_time(clk *clk);
+char * format_time(double diff);
+void print_time(double time);
 void release(char* lock);
 int test_and_set2(char* flag);
 int put_numb(int qt);
 int fill_vector(long *n);
-int get_rand();
+char get_rand();
 int manage_threads(long *n, int *k);
 void *sum(void* arg);
 int empty_vector();
-int executor(long *n, int *k, clk* clo);
-int clk_calc_time(clk *clk);
+int executor(long *n, int *k);
+double clk_calc_time(clk *clk);
 int test_fonctions();
 char* concat(char *s1, char *s2);
 

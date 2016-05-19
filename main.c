@@ -4,7 +4,6 @@
  *
  * Created on May 7, 2016, 12:49 AM
  */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -12,6 +11,8 @@
 #include <time.h>
 #include <string.h>
 #include "somador.h"
+//#include "mtwist.h"
+#include "mtwist.c"
 
 #define MAX = 100;
 #define MIN = -100;
@@ -26,32 +27,16 @@ char * list; // list of random number
 int *acc; // sum of the numbers in the list
 char* sum_lock;
 char* lock_index;
-long * med;
 
-//typedef struct clk {
-//    clock_t beg;
-//    clock_t end;
-//};
+//long * med;
 
-//typedef struct exec {
-//    int time;
-//    int qt_nb;
-//    int nb_threads;
-//};
-//typedef clk clk;
-//typedef clk clk;
-
-int set_beg_time(clk *clk) {
+double set_beg_time(clk *clk) {
     clk->beg = clock();
     return 0;
 }
 
-int set_end_time(clk *clk) {
+double set_end_time(clk *clk) {
     clk->end = clock();
-    return 0;
-}
-
-int spinlock() {
     return 0;
 }
 
@@ -69,9 +54,9 @@ void acquire(char* lock) {
  * Format the time
  * @return pointer to 
  */
-char * format_time(int diff) {
+char * format_time(double diff) {
     char str[20];
-    sprintf(str, "%d", diff);
+    sprintf(str, "%f", diff);
     char * ex = "exec time: ";
     char * con = concat(ex, str);
     return con;
@@ -85,9 +70,9 @@ char* concat(char *s1, char *s2) {
     return result;
 }
 
-void print_time(clk *clk) {
-    int tx = clk_calc_time(clk);
-    char* res = format_time(tx);
+void print_time(double time) {
+    //    double tx = clk_calc_time(clk);
+    char* res = format_time(time);
     printf(" res: %s \n", res);
 
 }
@@ -112,18 +97,6 @@ int test_and_set2(char* flag) {
     return anterior;
 }
 
-///**
-// * Responsible for puting rand number in the lista
-// * test and_set for preventing concurrent actons
-// * @return 
-// */
-//int put_numb(int qt) {
-//    while (qt--) {
-//        get_rand();
-//    }
-//    return 0;
-//}
-
 /**
  * fill the vector 
  * @param n, size of the vector
@@ -139,11 +112,73 @@ int fill_vector(long *n) {
 }
 
 /**
+ *NÃO ROLA
+ */
+int fill_with_threads(long *n, int *k) {
+    printf("fill\n");
+
+    long med = *n / (*k);
+    int rest = *n - (med * *k);
+    pthread_t *thread = malloc(sizeof (pthread_t) * *k);
+    for (int i = 0; i < *k; i++) {
+
+        sum_args *args = malloc(sizeof (sum_args));
+        args->index = med*i;
+        args->nb = med;
+        if (pthread_create(&thread[i], NULL, &add, (void *) args)) { // 3 arg = func to exec 4 arg = arg passed to func
+            printf("thread : %d \n", i);
+            printf("Error while creating threds. \n");
+            exit(EXIT_FAILURE);
+        }
+        //        free(args);
+    }
+    for (int i = 0; i < *k; i++) {
+        pthread_join(thread[i], NULL);
+        printf("WAITING THREAD:  %d \n", i);
+    }
+
+
+
+    pthread_t *lon_th = malloc(sizeof (pthread_t));
+    // only enter the loop if rest>0
+    if (rest) {
+        sum_args * args = malloc(sizeof (sum_args));
+        args->index = *k*med;
+        args->nb = rest;
+        if (pthread_create(&lon_th[0], NULL, &add, (void *) args)) { // 3 arg = func to exec 4 arg = arg passed to func
+            printf("Error while creating threds. \n");
+            exit(EXIT_FAILURE);
+        }
+        pthread_join(thread[0], NULL);
+    }
+    return 0;
+}
+
+/**
+ NÃO ROLA
+ */
+void *add(void * arg) {
+    sum_args *args = malloc(sizeof (sum_args));
+    args = (sum_args *) arg;
+    int med = args->nb;
+    long ind = args->index;
+    char rnd;
+    int i;
+    printf("ADD THREAD: %lu , START: %lu  ,  \n", ind / med, ind);
+    for (i = 0; i < med; i++) {
+        rnd = get_rand();
+        list[ind + i] = rnd;
+    }
+    printf("ADD END DEBUG\n");
+    return args;
+}
+
+/**
  * rand number between -100 and 100
  * @return  -100 <int <100
  */
-int get_rand() {
-    int rnd = (rand() % 200) - 100;
+char get_rand() {
+    char rnd = rand() %200 - 100;
     return rnd;
 }
 
@@ -159,56 +194,40 @@ int get_rand() {
  * @return 
  */
 int manage_threads(long *n, int *k) {
-    int rest = *n - (*med * *k);
+    long med = *n / (*k);
+    int rest = *n - (med * *k);
+    printf("DEBUG");
     pthread_t *thread = malloc(sizeof (pthread_t) * *k);
-    int med = *n / (*k);
     for (int i = 0; i < *k; i++) {
         sum_args *args = malloc(sizeof (sum_args));
         args->index = med*i;
         args->nb = med;
-        //        long* ind = malloc(sizeof (long));
-        //        *ind = (*med) * i;
-        printf("THREAD: %d ", i);
         if (pthread_create(&thread[i], NULL, &sum, (void *) args)) { // 3 arg = func to exec 4 arg = arg passed to func
             printf("Error while creating threds. \n");
             exit(EXIT_FAILURE);
         }
-        printf("\n\nAFTER THREAD: %d\n\n ", i);
-        free(args);
+        //        free(args);
 
     }
+    for (int i = 0; i < *k; i++) {
+        pthread_join(thread[i], NULL);
+    }
 
+
+
+    pthread_t *lon_th = malloc(sizeof (pthread_t));
     // only enter the loop if rest>0
     if (rest) {
         sum_args * args = malloc(sizeof (sum_args));
         args->index = *k*med;
         args->nb = rest;
-        if (pthread_create(&thread[0], NULL, &sum, (void *) args)) { // 3 arg = func to exec 4 arg = arg passed to func
+        if (pthread_create(&lon_th[0], NULL, &sum, (void *) args)) { // 3 arg = func to exec 4 arg = arg passed to func
             printf("Error while creating threds. \n");
             exit(EXIT_FAILURE);
         }
+        pthread_join(thread[0], NULL);
     }
-    //    for (int ind_rest = 0; ind_rest < rest; ind_rest++) {
-    //    }
-    //    if (rest) {
-    //        
-    //    }
-    //
-    //    int rest = 0;
-    //    int index = 0;
-    //    while (n % k) {
-    //        rest++;
-    //        n--;
-    //    }
-    //    //cria os threads passando o index de onde deve começar a ler.
-    //    if (rest) {
-    //        somador(med + rest, index);
-    //        rest--;
-    //    } else {
-    //        somador(med, index);
-    //    }
     return 0;
-
 }
 
 /**
@@ -225,46 +244,17 @@ void *sum(void * arg) {
     args = (sum_args *) arg;
     int med = args->nb;
     long ind = args->index;
-    //    long * ind;
     double *sum = malloc(sizeof (double));
     *sum = 0;
     int i;
     for (i = 0; i < med; i++) {
+        printf("Thread: %lu , VAL: %d\n", ind / med,list[ind+i]);
         *sum += list[ind + i];
     }
-    //    printf("\n  SOMADOR SUM: %d  \n", *sum);
     acquire(sum_lock);
     *acc += *sum;
-    printf("\n\nACC: %d \n\n", *acc); //segmentation fault
     release(sum_lock);
-    printf("\n\n nTHREAD : %lu  LEAVING MODAFUCKA\n\n", ind / med); //segmentation fault
     return args;
-}
-
-//void *sum_rest(void * arg) {
-//    long * ind = (long *) arg;
-//    double *sum = malloc(sizeof (double));
-//    *sum = 0;
-//    int i;
-//    for (i = 0; i < *med && ; i++) {
-//        *sum += list[*ind + i];
-//    }
-//    //    printf("\n  SOMADOR SUM: %d  \n", *sum);
-//    acquire(sum_lock);
-//    *acc += *sum;
-//    printf("\n\nACC: %d \n\n", *acc); //segmentation fault
-//    release(sum_lock);
-//
-//    printf("\n\n nTHREAD : %lu  LEAVING MODAFUCKA\n\n", *ind / (*med)); //segmentation fault
-//    return ind;
-//}
-
-/**
- * empty the vector
- * @return 
- */
-int empty_vector() {
-    return 0;
 }
 
 /**
@@ -273,28 +263,9 @@ int empty_vector() {
  * @param k, lista com valores de nb de threads
  * @return 
  */
-int executor(long *n, int *k, clk * clo) {
-    // for i in lista k
-    /////for j in lista numeros
-    //    for (int j = 0; j < n; j++) {
-
-    printf("before fill vector\n");
+int executor(long *n, int *k) {
     fill_vector(n);
-    printf("after fill vector\n");
-    //    int beg_time = get_time();
-
-    set_beg_time(clo);
-    printf("before gerenciador\n\n BEGclo: %lu\n", (long) clo->beg);
     manage_threads(n, k);
-    printf("after gerenciador\n");
-    set_end_time(clo);
-    printf("after set end time \n\nENDclo: %lu\n", (long) clo->beg);
-    print_time(clo);
-    printf("after print time\n");
-    printf("ACC %d\n", *acc);
-    //    int end_time = get_time();
-    //    int time = calculate_time(beg_time, end_time);
-
     return 0;
 }
 
@@ -304,27 +275,23 @@ int executor(long *n, int *k, clk * clo) {
  * 
  * @return the time when called
  */
-int clk_calc_time(clk * clk) {
+double clk_calc_time(clk * clk) {
     double t = (double) (clk->end - clk->beg) / CLOCKS_PER_SEC;
 
     return t;
 }
 
-int test_fonctions() {
-
+int print_exe(double n[3][13]) {
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 13; j++) {
+            printf("%f ", n[i][j]);
+        }
+        printf("\n");
+    }
     return 0;
 }
 
-int allocate(long size) {
-    printf("beg allocate ");
-
-    return 0;
-}
-
-clk *initialize(long *n, int*k) {
-    med = malloc(sizeof (long));
-    *med = *n / *k;
-    printf("EXECUTION WITH: \n %d threads and %lu numbers", *k, *n);
+int initialize(long *n) {
     srand(time(NULL));
     list = (char *) malloc(*n * sizeof (char));
     acc = malloc(sizeof (int));
@@ -333,30 +300,6 @@ clk *initialize(long *n, int*k) {
     *sum_lock = 0;
     lock_index = malloc(sizeof (char));
     *lock_index = 0;
-    clk * clo = malloc(sizeof (clk));
-    clo->beg = 0;
-    clo->end = 0;
-
-    return clo;
-}
-
-/**
- * execute the program with a specific n and k.
- * @param n
- * @param k
- * @return 
- */
-int run(long *n, int* k) {
-    clk * clo = initialize(n, k);
-    executor(n, k, clo);
-    int i = 0;
-    int sum = 0;
-    while (list[i]) {
-        sum += list[i];
-        printf("BOYAH NUM: %d sum: %d\n", list[i], sum);
-        i++;
-    }
-    free(list);
     return 0;
 }
 
@@ -367,17 +310,52 @@ int run(long *n, int* k) {
  * @return 0, if no error
  */
 int run_all() {
-    //    for (){
-    //        for(){
+    // start clock
+    clk * clo = malloc(sizeof (clk));
+    clo->beg = 0;
+    clo->end = 0;
+    int nb_thread[13] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30};
+    long list_size[3] = {N8, N9, N10};
+    double ex[3][13]; //sizelist/threads/
+    int size;
+    int nb_t;
+    double sum_time;
+    int iter;
+    int times = 10;
+    long n;
+    int k;
+    for (size = 2; size < 3; size++) {
+        printf("\nSIZE OF LIST\n: %lu", list_size[size]);
+        initialize(&list_size[size]);
+        for (nb_t = 0; nb_t < 13; nb_t++) {
+            //set beg clock
+            set_beg_time(clo);
+            printf("NB OF THREADS: %d\n", nb_thread[nb_t]);
+            sum_time = 0;
+            iter = 0;
+            while (iter < times) {
+                printf("ITER: %d\n", iter);
+                n = list_size[size];
+                k = nb_thread[nb_t];
+                executor(&n, &k);
+                set_end_time(clo);
+                sum_time += clk_calc_time(clo);
+                iter++;
+            }
+            ex[size][nb_t] = sum_time / times;
+            print_time(sum_time / times);
+        }
+        free_some();
+        break;
+    }
+    print_exe(ex);
 
-    long n = 3;
-    int k = 3;
-    run(&n, &k);
-    //        }
-    //    }
+    return 0;
+}
 
-    //    int nb_threads[13] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30];
-    //    long nb_threads[3] = [N8, N9, N10];
+int free_some() {
+    free(list);
+    free(acc);
     return 0;
 }
 
@@ -401,6 +379,39 @@ int main(int argc, char** argv) {
         printf("wrong number of arguments [2 args needed] \n");
         return -1;
     }
+    //    mt_state *st = malloc(sizeof (mt_state));
+    //    uint32_t *seed = malloc(sizeof (uint32_t));
+    //    mts_seed32(st, *seed);
+    //    srand(time(NULL));
+    //    int u = mt_seed() % 200 -100;
+    //    printf("aaaaa %d ", u);
+    //    mts_seed32new(&st, seed);
+    //
+    //    int k = 10;
+    //    long q = 1000000000;
+    //    clk * clo = malloc(sizeof (clk));
+    //    clk * clo2 = malloc(sizeof (clk));
+    //    clo->beg = 0;
+    //    clo->end = 0;
+    //    clo2->beg = 0;
+    //    clo2->end = 0;
+    //    printf("DEBUG1");
+    //    initialize(&q);
+    //    //    set_beg_time(clo);
+    //    //    printf("DEBUG2");
+    //    //    fill_vector(&q);
+    //    //    printf("DEBUG3");
+    //    //    set_end_time(clo);
+    //    //    print_time(clk_calc_time(clo));
+    //
+    //    printf("DEBUG4");
+    //
+    //    set_beg_time(clo2);
+    //    fill_with_threads(&q, &k);
+    //    printf("DEBUG5");
+    //    set_end_time(clo2);
+    //    print_time(clk_calc_time(clo2));
+
     run_all();
     return (EXIT_SUCCESS);
 }
